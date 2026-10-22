@@ -1,0 +1,67 @@
+name: Lolipop connection check
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: lolipop-connection-check
+  cancel-in-progress: false
+
+jobs:
+  connection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check SSH and WordPress version (read only)
+        shell: bash
+        env:
+          LOLIPOP_SSH_PASSWORD: ${{ secrets.LOLIPOP_SSH_PASSWORD }}
+          LOLIPOP_KNOWN_HOSTS: ${{ secrets.LOLIPOP_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$LOLIPOP_SSH_PASSWORD" || -z "$LOLIPOP_KNOWN_HOSTS" ]]; then
+            echo 'Configure LOLIPOP_SSH_PASSWORD and LOLIPOP_KNOWN_HOSTS in repository Actions secrets.'
+            exit 1
+          fi
+          umask 077
+          session_dir=$(mktemp -d "$RUNNER_TEMP/lolipop-connect.XXXXXXXX")
+          trap 'rm -rf -- "$session_dir"' EXIT
+          printf '%s\n' "$LOLIPOP_KNOWN_HOSTS" > "$session_dir/known_hosts"
+          ssh-keygen -F '[ssh.lolipop.jp]:2222' -f "$session_dir/known_hosts" > /dev/null
+          cat > "$session_dir/askpass" <<'ASKPASS'
+          #!/bin/sh
+          printf '%s\n' "$LOLIPOP_SSH_PASSWORD"
+          ASKPASS
+          chmod 700 "$session_dir/askpass"
+          export SSH_ASKPASS="$session_dir/askpass"
+          export SSH_ASKPASS_REQUIRE=force
+          export DISPLAY=:0
+          ssh -T -p 2222 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$session_dir/known_hosts" \
+            -o GlobalKnownHostsFile=/dev/null \
+            -o UpdateHostKeys=no \
+            -o PubkeyAuthentication=no \
+            -o PreferredAuthentications=keyboard-interactive,password \
+            -o NumberOfPasswordPrompts=1 \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=2 \
+            perma.jp-goat-music@ssh.lolipop.jp 'bash -s' <<'REMOTE'
+          set -eu
+          /usr/local/php/8.5/bin/php -r '
+          $root = getenv("HOME") . "/web/goatmusic.jp";
+          if (!is_file($root . "/wp-load.php")) {
+              fwrite(STDERR, "WordPress installation not found\n");
+              exit(1);
+          }
+          require $root . "/wp-includes/version.php";
+          echo "SSH connection: OK\n";
+          echo "Target: goatmusic.jp\n";
+          echo "PHP CLI: " . PHP_VERSION . "\n";
+          echo "WordPress: " . $wp_version . "\n";
+          '
+          REMOTE
+          printf '### Lolipop connection check\n\nSSH authentication and WordPress version read succeeded. No site updates were requested.\n' >> "$GITHUB_STEP_SUMMARY"
