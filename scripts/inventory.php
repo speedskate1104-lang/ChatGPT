@@ -50,7 +50,7 @@ foreach (glob($root . '/wp-content/themes/*/style.css') as $file) {
 }
 $flags = [];
 foreach (['WP_DEBUG','WP_DEBUG_LOG','WP_DEBUG_DISPLAY','DISALLOW_FILE_EDIT','DISALLOW_FILE_MODS',
-    'FORCE_SSL_ADMIN','DISABLE_WP_CRON','AUTOMATIC_UPDATER_DISABLED','WP_AUTO_UPDATE_CORE','MULTISITE'] as $key) {
+    'FORCE_SSL_ADMIN','DISABLE_WP_CRON','AUTOMATIC_UPDATER_DISABLED','WP_AUTO_UPDATE_CORE','MULTISITE','DISALLOW_UNFILTERED_HTML'] as $key) {
     // Output booleans only; WP_DEBUG_LOG can contain an internal file path.
     $flags[$key] = defined($key) ? (bool) constant($key) : null;
 }

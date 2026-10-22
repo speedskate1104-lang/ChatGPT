@@ -51,6 +51,19 @@ def affected(version, operators):
     return result
 
 
+def vulnerability_records(content, kind):
+    if 'vulnerability' not in content:
+        raise ValueError('missing vulnerability field')
+    if kind in ('plugin', 'theme') and not content.get('name'):
+        raise ValueError('component not identified in vulnerability database')
+    records = content['vulnerability']
+    if records is None:
+        return []
+    if not isinstance(records, list):
+        raise ValueError('unexpected vulnerability list format')
+    return records
+
+
 def text(value):
     return html.unescape(str(value)).replace('\n', ' ').replace('\r', ' ').replace('|', '/') .replace('<', '&lt;').replace('>', '&gt;')
 
@@ -148,7 +161,7 @@ def main(path):
             findings = []
             if content.get('closed') in (1, '1', True):
                 findings.append('公式ディレクトリで公開停止: ' + str(content.get('closed_reason')))
-            for entry in content.get('vulnerability', []):
+            for entry in vulnerability_records(content, kind):
                 if affected(version, entry.get('operator', {})):
                     sources = [s.get('link', '') for s in entry.get('source', []) if s.get('link', '').startswith('https://')]
                     findings.append(entry.get('name', '名称不明') + ' / ' + ' '.join(sources[:2]))
@@ -169,6 +182,9 @@ def main(path):
                '情報源: WPVulnerability の集約データ。バージョン範囲の一致は攻撃成功を意味しません。',
                f'照合完了: {checked}/{len(targets)} 対象。未検出でも安全性の保証ではありません。']
     report += ['- ' + text(m) for m in matches] or ['- 照合できた範囲では該当なし。']
+    if any('whats-new-genarator' in m for m in matches):
+        report += ['- CVE-2024-32548: 参照先のWordfence勧告では管理者権限が必要で、マルチサイトまたはunfiltered_html無効化の環境に限定。版の一致のみで攻撃可能とは判定しません。',
+                   '- MULTISITE=' + str(flags.get('MULTISITE')) + ' / DISALLOW_UNFILTERED_HTML=' + str(flags.get('DISALLOW_UNFILTERED_HTML')) + '。権限フィルターの影響は未検査。']
     report += ['', '## 未確認・保留'] + ['- ' + text(u) for u in unknown]
     report += ['', '## 更新の判断', '- 今回の更新実行: 0件。',
                '- 互換性テストと復元可能性を確認できていないため、設定・プラグイン・テーマの変更は保留。',

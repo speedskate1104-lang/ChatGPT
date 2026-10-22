@@ -7,6 +7,16 @@ audit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit)
 
 class VersionRangeTests(unittest.TestCase):
+    def test_empty_known_dataset_is_supported(self):
+        self.assertEqual(audit.vulnerability_records({'name': 'Abletone', 'vulnerability': None}, 'theme'), [])
+        self.assertEqual(audit.vulnerability_records({'core': '7.1.3', 'vulnerability': None}, 'core'), [])
+
+    def test_unidentified_component_is_not_safe(self):
+        with self.assertRaises(ValueError):
+            audit.vulnerability_records({'name': None, 'vulnerability': None}, 'theme')
+        with self.assertRaises(ValueError):
+            audit.vulnerability_records({'name': 'Abletone'}, 'theme')
+
     def test_fixed_release_is_excluded(self):
         operators = {'max_version': '5.3.2', 'max_operator': 'lt'}
         self.assertTrue(audit.affected('5.3.1', operators))
