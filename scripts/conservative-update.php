@@ -60,16 +60,21 @@ function goat_tree($directory) {
 }
 function goat_permissions_and_lint($directory) {
     chmod($directory, 0755);
+    $files = [];
     $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
     foreach ($it as $file) {
         if (!chmod($file->getPathname(), $file->isDir() ? 0755 : 0644)) { goat_fail('Cannot set package permissions'); }
-        if ($file->isFile() && strtolower($file->getExtension()) === 'php') {
-            $output = []; $status = 0;
-            exec(escapeshellarg(PHP_BINARY) . ' -l ' . escapeshellarg($file->getPathname()) . ' 2>&1', $output, $status);
-            if ($status !== 0) { goat_fail('New package PHP syntax check failed'); }
-        }
+        if ($file->isFile() && strtolower($file->getExtension()) === 'php') { $files[] = $file->getPathname(); }
+    }
+    // PHP >=8.3 supports linting multiple files. Keep sequential bounded batches.
+    if (PHP_VERSION_ID < 80300) { goat_fail('PHP >=8.3 required for batched lint'); }
+    foreach (array_chunk($files, 50) as $batch) {
+        $output = []; $status = 0;
+        exec(escapeshellarg(PHP_BINARY) . ' -l ' . implode(' ', array_map('escapeshellarg', $batch)) . ' 2>&1', $output, $status);
+        if ($status !== 0) { goat_fail('New package PHP syntax check failed'); }
     }
 }
+
 function goat_health() {
     $result = [];
     foreach (['/', '/contact/', '/artists/', '/goat-works/'] as $route) {
